@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 360 Video Player</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+        }
+        #container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #videoInput {
+            display: none;
+        }
+        #uploadButton {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        .info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .info p {
+            margin: 0;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="videoInput" accept="video/*">
+    <button id="uploadButton">Upload Video</button>
+    <div id="container"></div>
+    <div class="info">
+        <p>Click and drag to look around</p>
+        <p>Use the mouse wheel to zoom in and out</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        const container = document.getElementById('container');
+        container.appendChild(renderer.domElement);
+
+        const video = document.createElement('video');
+        video.loop = true;
+        video.muted = true;
+        video.crossOrigin = 'anonymous';
+
+        const videoTexture = new THREE.VideoTexture(video);
+        videoTexture.minFilter = THREE.LinearFilter;
+        videoTexture.magFilter = THREE.LinearFilter;
+        videoTexture.format = THREE.RGBFormat;
+
+        const sphereGeometry = new THREE.SphereGeometry(500, 60, 40);
+        sphereGeometry.scale(-1, 1, 1);
+        const sphereMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        scene.add(sphere);
+
+        camera.position.set(0, 0, 0);
+
+        const videoInput = document.getElementById('videoInput');
+        const uploadButton = document.getElementById('uploadButton');
+        uploadButton.addEventListener('click', () => {
+            videoInput.click();
+        });
+
+        videoInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                video.src = url;
+                video.play();
+            }
+        });
+
+        const mouse = new THREE.Vector2();
+        const previousMouse = new THREE.Vector2();
+        const targetRotation = new THREE.Quaternion();
+        const sensitivity = 0.1;
+        let isDragging = false;
+
+        function onMouseMove(event) {
+            event.preventDefault();
+            if (isDragging) {
+                const deltaMove = {
+                    x: event.clientX - previousMouse.x,
+                    y: event.clientY - previousMouse.y
+                };
+
+                // Rotate horizontally
+                const deltaRotationY = deltaMove.x * sensitivity * (Math.PI / 180);
+                const deltaRotationX = deltaMove.y * sensitivity * (Math.PI / 180);
+
+                // Rotate vertically
+                const deltaRotationQuaternionX = new THREE.Quaternion().setFromEuler(new THREE.Euler(deltaRotationX, 0, 0, 'XYZ'));
+                const deltaRotationQuaternionY = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, deltaRotationY, 0, 'XYZ'));
+                
+                // Combine rotations
+                targetRotation.multiplyQuaternions(deltaRotationQuaternionX, targetRotation);
+                targetRotation.multiplyQuaternions(deltaRotationQuaternionY, targetRotation);
+            }
+            previousMouse.set(event.clientX, event.clientY);
+        }
+
+        function onMouseDown(event) {
+            event.preventDefault();
+            isDragging = true;
+            previousMouse.set(event.clientX, event.clientY);
+        }
+
+        function onMouseUp(event) {
+            event.preventDefault();
+            isDragging = false;
+        }
+
+        function onWheel(event) {
+            event.preventDefault();
+            camera.fov -= event.deltaY * 0.05;
+            camera.updateProjectionMatrix();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        function updateCamera() {
+            camera.quaternion.slerp(targetRotation, 0.1);
+        }
+
+        renderer.domElement.addEventListener('mousemove', onMouseMove, false);
+        renderer.domElement.addEventListener('mousedown', onMouseDown, false);
+        renderer.domElement.addEventListener('mouseup', onMouseUp, false);
+        renderer.domElement.addEventListener('wheel', onWheel, false);
+
+        animate();
+    </script>
+</body>
+</html>
